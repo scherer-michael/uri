@@ -39,11 +39,14 @@ namespace uri
         };
 
         URI() = default;
-        explicit URI(std::string const& uri) : uri_(uri)
+
+        explicit URI(std::string&& uri) : uri_(std::move(uri))
         {
             parse();
         }
-        explicit URI(std::string&& uri) : uri_(std::move(uri))
+
+        URI(std::string const& uri, std::string const& defScheme = {}, int defPort = 0)
+            : uri_(uri), defaultScheme_(defScheme), defaultPort_(defPort)
         {
             parse();
         }
@@ -51,7 +54,7 @@ namespace uri
         // Implicit conersion to type std::string for convinience
         operator std::string() const
         {
-            return uri_;
+            return string();
         }
 
         [[nodiscard]] std::optional<strv> scheme() const
@@ -240,6 +243,15 @@ namespace uri
             return isAbsolutePath_;
         }
 
+        void parse(std::string const& str)
+        {
+            clear();
+
+            uri_ = str;
+
+            parse();
+        }
+
         void setScheme(std::string const& newScheme)
         {
             if (scheme().has_value())
@@ -257,7 +269,7 @@ namespace uri
 
         std::string string() const
         {
-            return uri_;
+            return output();
         }
 
         void clear()
@@ -276,6 +288,16 @@ namespace uri
             uri_.clear();
         }
 
+        void setDefaultScheme(std::string const& newDefaultScheme)
+        {
+            defaultScheme_ = newDefaultScheme;
+        }
+
+        void setDefaultPort(int newDefaultPort)
+        {
+            defaultPort_ = newDefaultPort;
+        }
+
       private:
         static constexpr strv SCHEME_SEP = ":";
         static constexpr strv AUTH_ANON = "//";
@@ -286,6 +308,29 @@ namespace uri
         static constexpr strv QUERY_SEP = "&";
         static constexpr strv FRAG_SEP = "#";
         static constexpr strv KV_SEP = "=";
+
+        std::string output() const
+        {
+            std::string out = uri_;
+            if (scheme_.empty() && !defaultScheme_.empty())
+            {
+                out.insert(0u, defaultScheme_ + SCHEME_SEP.data() + AUTH_ANON.data());
+            }
+            if (port_.empty() && defaultPort_ > 0)
+            {
+                auto pos = out.find(host_);
+                if (pos == std::string::npos)
+                {
+                    throw std::runtime_error("Cannot find host port in URI.");
+                }
+
+                pos += host_.size();
+                auto portStr = std::to_string(defaultPort_);
+                out.insert(pos, PORT_SEP.data() + portStr);
+            }
+
+            return out;
+        }
 
         bool isSchemeCharacter(char c) const
         {
@@ -416,7 +461,7 @@ namespace uri
             {
                 return checks::elements::is_IPLiteral(host);
             }
-            return checks::entities::is_IPv4(host)
+            return checks::elements::is_IPv4(host)
                    || checks::elements::is_regular_name(host);
         }
 
@@ -646,12 +691,12 @@ namespace uri
             {
                 switch (step)
                 {
-                    case utils::URI::ParsingSteps::Scheme: {
+                    case uri::URI::ParsingSteps::Scheme: {
                         uriView = tryParseScheme(uriView);
                         step = ParsingSteps::CheckAuthority;
                         break;
                     }
-                    case utils::URI::ParsingSteps::CheckAuthority: {
+                    case uri::URI::ParsingSteps::CheckAuthority: {
                         auto authAnon = (uriView.size() > AUTH_ANON.size()
                                                  && uriView.substr(0, AUTH_ANON.size()) == AUTH_ANON
                                              ? AUTH_ANON
@@ -661,7 +706,8 @@ namespace uri
                         if (!authAnon.empty()
                             || nxtPathSep > 0 // means there is caracters until path's begin
                             || nxtPathSep == strv::npos // means there is no path at all
-                            || uriView.substr(nxtPathSep).empty() // means there is an trailing separator
+                            || uriView.substr(nxtPathSep)
+                                   .empty() // means there is an trailing separator
                         )
                         {
                             step = ParsingSteps::Authority;
@@ -676,12 +722,12 @@ namespace uri
                         }
                         break;
                     }
-                    case utils::URI::ParsingSteps::Authority: {
+                    case uri::URI::ParsingSteps::Authority: {
                         uriView = tryParseAuthority(uriView);
                         step = ParsingSteps::CheckSeparator;
                         break;
                     }
-                    case utils::URI::ParsingSteps::CheckSeparator: {
+                    case uri::URI::ParsingSteps::CheckSeparator: {
                         if (uriView.front() == PATH_SEP.front())
                         {
                             step = ParsingSteps::Path;
@@ -698,17 +744,17 @@ namespace uri
                         }
                         break;
                     }
-                    case utils::URI::ParsingSteps::Path: {
+                    case uri::URI::ParsingSteps::Path: {
                         uriView = tryParsePath(uriView);
                         step = ParsingSteps::CheckSeparator;
                         break;
                     }
-                    case utils::URI::ParsingSteps::Query: {
+                    case uri::URI::ParsingSteps::Query: {
                         uriView = tryParseQuery(uriView);
                         step = ParsingSteps::Fragment;
                         break;
                     }
-                    case utils::URI::ParsingSteps::Fragment: {
+                    case uri::URI::ParsingSteps::Fragment: {
                         uriView = tryParseFragment(uriView);
                         break;
                     }
@@ -732,5 +778,8 @@ namespace uri
 
         std::vector<strv> pathSegments_;
         std::map<strv, strv> queries_;
+
+        std::string defaultScheme_;
+        int defaultPort_ = 0;
     };
 } // namespace uri
