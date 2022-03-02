@@ -1,3 +1,19 @@
+#pragma once
+
+#include "uri/character_checks.h"
+#include "uri/elements_checks.h"
+
+#include <algorithm>
+#include <map>
+#include <numeric>
+#include <optional>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <type_traits>
+#include <utility>
+#include <vector>
+
 namespace uri
 {
     class URI
@@ -275,7 +291,7 @@ namespace uri
         {
             // scheme = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )
             constexpr std::array ch{'+', '-', '.'};
-            return utils::checks::characters::is_alpha(c) || utils::checks::characters::is_digit(c)
+            return checks::characters::is_alpha(c) || checks::characters::is_digit(c)
                    || std::any_of(ch.begin(), ch.end(), [&c](auto const& h) { return c == h; });
         }
 
@@ -306,7 +322,7 @@ namespace uri
             {
                 return false;
             }
-            if (!utils::checks::characters::is_alpha(scheme.front()))
+            if (!checks::characters::is_alpha(scheme.front()))
             {
                 return false;
             }
@@ -352,16 +368,16 @@ namespace uri
             constexpr auto ch = ':';
             for (std::string_view::size_type i = 0; i < user.size(); ++i)
             {
-                if (utils::checks::characters::is_unreserved(user[i])
-                    || utils::checks::characters::is_subdelimiter(user[i]) || (user[i] == ch))
+                if (checks::characters::is_unreserved(user[i])
+                    || checks::characters::is_subdelimiter(user[i]) || (user[i] == ch))
                 {
                     continue;
                 }
 
                 // pct-encoded
                 if (user[i] == '%' && i < (user.size() - 2)
-                    && utils::checks::characters::is_hex_digit(user[i + 1])
-                    && utils::checks::characters::is_hex_digit(user[i + 2]))
+                    && checks::characters::is_hex_digit(user[i + 1])
+                    && checks::characters::is_hex_digit(user[i + 2]))
                 {
                     i += 2;
                     continue;
@@ -398,16 +414,16 @@ namespace uri
         {
             if (host.find_first_of('[') != std::string_view::npos)
             {
-                return utils::checks::entities::is_IPLiteral(host);
+                return checks::elements::is_IPLiteral(host);
             }
-            return utils::checks::entities::is_IPv4(host)
-                   || utils::checks::entities::is_regular_name(host);
+            return checks::entities::is_IPv4(host)
+                   || checks::elements::is_regular_name(host);
         }
 
         bool isPortCompliant(std::string_view const& port) const
         {
             return std::all_of(port.cbegin(), port.cend(), [](char c) {
-                return utils::checks::characters::is_digit(c);
+                return checks::characters::is_digit(c);
             });
         }
 
@@ -486,8 +502,8 @@ namespace uri
             constexpr std::array ch{':', '@', '/' /* add / because it is kept with the segment*/};
             for (std::string_view::size_type i = 0; i < segment.size(); ++i)
             {
-                if (utils::checks::characters::is_unreserved(segment[i])
-                    || utils::checks::characters::is_subdelimiter(segment[i])
+                if (checks::characters::is_unreserved(segment[i])
+                    || checks::characters::is_subdelimiter(segment[i])
                     || std::any_of(
                         ch.begin(), ch.end(), [&h = segment[i]](auto const& c) { return c == h; }))
                 {
@@ -496,8 +512,8 @@ namespace uri
 
                 // pct-encoded
                 if (segment[i] == '%' && i < (segment.size() - 2)
-                    && utils::checks::characters::is_hex_digit(segment[i + 1])
-                    && utils::checks::characters::is_hex_digit(segment[i + 2]))
+                    && checks::characters::is_hex_digit(segment[i + 1])
+                    && checks::characters::is_hex_digit(segment[i + 2]))
                 {
                     i += 2;
                     continue;
@@ -533,8 +549,8 @@ namespace uri
             constexpr std::array ch{':', '@', '/', '?'};
             for (std::string_view::size_type i = 0; i < fragment.size(); ++i)
             {
-                if (utils::checks::characters::is_unreserved(fragment[i])
-                    || utils::checks::characters::is_subdelimiter(fragment[i])
+                if (checks::characters::is_unreserved(fragment[i])
+                    || checks::characters::is_subdelimiter(fragment[i])
                     || std::any_of(
                         ch.begin(), ch.end(), [&h = fragment[i]](auto const& c) { return c == h; }))
                 {
@@ -543,8 +559,8 @@ namespace uri
 
                 // pct-encoded
                 if (fragment[i] == '%' && i < (fragment.size() - 2)
-                    && utils::checks::characters::is_hex_digit(fragment[i + 1])
-                    && utils::checks::characters::is_hex_digit(fragment[i + 2]))
+                    && checks::characters::is_hex_digit(fragment[i + 1])
+                    && checks::characters::is_hex_digit(fragment[i + 2]))
                 {
                     i += 2;
                     continue;
@@ -645,8 +661,7 @@ namespace uri
                         if (!authAnon.empty()
                             || nxtPathSep > 0 // means there is caracters until path's begin
                             || nxtPathSep == strv::npos // means there is no path at all
-                            || uriView.substr(nxtPathSep)
-                                   .empty() // means there is an trailing separator
+                            || uriView.substr(nxtPathSep).empty() // means there is an trailing separator
                         )
                         {
                             step = ParsingSteps::Authority;
